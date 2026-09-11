@@ -1,0 +1,41 @@
+{% extends "base_email.html" %}
+{% block content %}
+<p style="margin:0 0 6px;font-size:13px;color:#2BAE8E;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;">Subscription active</p>
+<h1 style="margin:0 0 12px;font-size:26px;line-height:1.25;font-weight:800;color:#15181A;letter-spacing:-0.5px;">
+  {{ plan.name }} is live on your account.
+</h1>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.65;color:#4A5450;">
+  Hi {{ user.full_name.split()[0] }}, thank you for riding green with us.
+  You can now book any scheduled departure with zero payment at checkout — we just deduct a ride credit.
+</p>
+
+<table role="presentation" width="100%" style="margin:0 0 24px;">
+  <tr>
+    <td width="50%" style="background:#F0F6EA;border:1px solid #D5E7C6;border-radius:14px;padding:20px;" align="center">
+      <div style="font-size:34px;font-weight:800;color:#2F5233;">{{ subscription.credits_total }}</div>
+      <div style="font-size:12px;color:#4C8C2B;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-top:4px;">Ride credits</div>
+    </td>
+    <td width="12"></td>
+    <td width="50%" style="background:#EAF6F2;border:1px solid #C4E5DA;border-radius:14px;padding:20px;" align="center">
+      <div style="font-size:34px;font-weight:800;color:#1F7A63;">{{ plan.validity_days }}</div>
+      <div style="font-size:12px;color:#2BAE8E;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-top:4px;">Days of validity</div>
+    </td>
+  </tr>
+</table>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E0D2;border-radius:14px;overflow:hidden;margin:0 0 24px;">
+  {% for label, value in details %}
+  <tr>
+    <td style="padding:12px 18px;font-size:13px;color:#8A918D;{% if not loop.first %}border-top:1px solid #EFEEE4;{% endif %}width:42%;">{{ label }}</td>
+    <td style="padding:12px 18px;font-size:14px;color:#15181A;font-weight:600;{% if not loop.first %}border-top:1px solid #EFEEE4;{% endif %}">{{ value }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table role="presentation" width="100%"><tr><td align="center">
+  <a href="{{ company.web_url }}/dashboard"
+     style="display:inline-block;background:#4C8C2B;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:14px 30px;border-radius:999px;">
+    Schedule your first trip
+  </a>
+</td></tr></table>
+{% endblock %}

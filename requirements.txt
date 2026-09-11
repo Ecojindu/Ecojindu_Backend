@@ -1,0 +1,39 @@
+# Ecojindu Shuttle — Core Backend Service
+# Python 3.11+
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.5
+pydantic-settings==2.7.1
+email-validator==2.2.0
+
+# Database
+SQLAlchemy==2.0.37
+asyncpg==0.30.0
+alembic==1.14.1
+greenlet==3.1.1
+psycopg2-binary==2.9.10
+
+# Auth / crypto
+PyJWT==2.10.1
+bcrypt==4.2.1
+
+# HTTP / integrations
+httpx==0.28.1
+
+# QR codes + images
+qrcode==8.0
+pillow==11.1.0
+
+# Templating (branded HTML email)
+Jinja2==3.1.5
+
+# Scheduling
+APScheduler==3.11.0
+
+# Misc
+python-multipart==0.0.20
+
+# Tests
+pytest==8.3.4
+pytest-asyncio==0.25.2

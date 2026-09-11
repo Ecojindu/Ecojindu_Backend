@@ -1,0 +1,37 @@
+{% extends "base_email.html" %}
+{% block content %}
+<p style="margin:0 0 6px;font-size:13px;color:#C4562F;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;">
+  {{ 'Trip cancelled' if cancelled else 'Schedule update' }}
+</p>
+<h1 style="margin:0 0 12px;font-size:25px;line-height:1.3;font-weight:800;color:#15181A;letter-spacing:-0.5px;">
+  {{ trip.route_name }} — {{ trip.departure_label }}
+</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.65;color:#4A5450;">
+  Hi {{ booking.passenger_name.split()[0] }}, we're writing about booking
+  <strong style="color:#2F5233;font-family:'SF Mono',Menlo,monospace;">{{ booking.booking_ref }}</strong>.
+</p>
+
+<table role="presentation" width="100%" style="margin:0 0 22px;">
+  <tr><td style="background:#FBF3EE;border-left:4px solid #C4562F;border-radius:10px;padding:16px 18px;font-size:15px;line-height:1.65;color:#4A5450;">
+    {{ change_message }}
+  </td></tr>
+</table>
+
+{% if cancelled %}
+<p style="margin:0 0 22px;font-size:15px;line-height:1.65;color:#4A5450;">
+  A full refund has been queued to your original payment method and typically settles within 3–5 working days.
+  If you paid with ride credits, the credit has already been returned to your balance.
+</p>
+{% endif %}
+
+<table role="presentation" width="100%"><tr><td align="center">
+  <a href="{{ company.web_url }}/search"
+     style="display:inline-block;background:#4C8C2B;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:14px 30px;border-radius:999px;">
+    {{ 'Rebook another departure' if cancelled else 'View updated trip' }}
+  </a>
+</td></tr></table>
+
+<p style="margin:22px 0 0;font-size:13px;line-height:1.65;color:#8A918D;">
+  We're sorry for the disruption. Call {{ company.phone }} and we'll sort it out with you directly.
+</p>
+{% endblock %}

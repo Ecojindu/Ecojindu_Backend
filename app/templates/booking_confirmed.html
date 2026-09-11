@@ -1,0 +1,51 @@
+{% extends "base_email.html" %}
+{% block content %}
+<p style="margin:0 0 6px;font-size:13px;color:#4C8C2B;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;">Booking confirmed</p>
+<h1 style="margin:0 0 12px;font-size:26px;line-height:1.25;font-weight:800;color:#15181A;letter-spacing:-0.5px;">
+  You're on board, {{ booking.passenger_name.split()[0] }}.
+</h1>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.65;color:#4A5450;">
+  Your seat{{ 's' if booking.seats > 1 else '' }} on the {{ trip.departure_label }} departure {{ 'are' if booking.seats > 1 else 'is' }} secured.
+  Show the QR code below at the terminal — that's your boarding pass.
+</p>
+
+<!-- Reference chip -->
+<table role="presentation" width="100%" style="margin:0 0 24px;">
+  <tr><td style="background:#F0F6EA;border:1px solid #D5E7C6;border-radius:14px;padding:18px 20px;" align="center">
+    <div style="font-size:11px;color:#4C8C2B;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;">Booking reference</div>
+    <div style="font-size:30px;font-weight:800;color:#2F5233;letter-spacing:2px;margin-top:6px;font-family:'SF Mono',Menlo,Consolas,monospace;">{{ booking.booking_ref }}</div>
+  </td></tr>
+</table>
+
+<!-- QR -->
+{% if qr_cid %}
+<table role="presentation" width="100%" style="margin:0 0 24px;">
+  <tr><td align="center" style="background:#FFFFFF;border:2px dashed #C9D8BE;border-radius:18px;padding:22px;">
+    <img src="cid:{{ qr_cid }}" alt="Boarding QR code for {{ booking.booking_ref }}" width="220" height="220" style="display:block;width:220px;height:220px;border-radius:10px;" />
+    <div style="margin-top:12px;font-size:12px;color:#8A918D;">Scan at the Nnenna Otti Bus Terminal gate</div>
+  </td></tr>
+</table>
+{% endif %}
+
+<!-- Trip details -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E0D2;border-radius:14px;overflow:hidden;margin:0 0 24px;">
+  <tr><td colspan="2" style="background:#2F5233;padding:14px 18px;color:#FFFFFF;font-size:15px;font-weight:700;">{{ trip.route_name }}</td></tr>
+  {% for label, value in details %}
+  <tr>
+    <td style="padding:12px 18px;font-size:13px;color:#8A918D;border-top:1px solid #EFEEE4;width:42%;">{{ label }}</td>
+    <td style="padding:12px 18px;font-size:14px;color:#15181A;font-weight:600;border-top:1px solid #EFEEE4;">{{ value }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table role="presentation" width="100%"><tr><td align="center">
+  <a href="{{ company.web_url }}/manage?ref={{ booking.booking_ref }}"
+     style="display:inline-block;background:#4C8C2B;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:14px 30px;border-radius:999px;">
+    View or manage this booking
+  </a>
+</td></tr></table>
+
+<p style="margin:24px 0 0;font-size:13px;line-height:1.65;color:#8A918D;">
+  Please arrive <strong style="color:#4A5450;">20 minutes</strong> before departure. Free cancellation up to 2 hours before you travel.
+</p>
+{% endblock %}

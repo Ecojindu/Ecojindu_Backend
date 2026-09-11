@@ -1,0 +1,39 @@
+{% extends "base_email.html" %}
+{% block content %}
+<p style="margin:0 0 6px;font-size:13px;color:#2BAE8E;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;">
+  {{ 'Departing in 2 hours' if window == '2h' else 'Travelling tomorrow' }}
+</p>
+<h1 style="margin:0 0 12px;font-size:26px;line-height:1.25;font-weight:800;color:#15181A;letter-spacing:-0.5px;">
+  {{ trip.departure_label }} · {{ trip.route_name }}
+</h1>
+<p style="margin:0 0 22px;font-size:15px;line-height:1.65;color:#4A5450;">
+  Hi {{ booking.passenger_name.split()[0] }}, a quick reminder about your trip.
+  {% if window == '2h' %}Please head to the terminal now — boarding closes 10 minutes before departure.
+  {% else %}Please arrive 20 minutes early with your QR ticket ready.{% endif %}
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E0D2;border-radius:14px;overflow:hidden;margin:0 0 24px;">
+  {% for label, value in details %}
+  <tr>
+    <td style="padding:12px 18px;font-size:13px;color:#8A918D;{% if not loop.first %}border-top:1px solid #EFEEE4;{% endif %}width:42%;">{{ label }}</td>
+    <td style="padding:12px 18px;font-size:14px;color:#15181A;font-weight:600;{% if not loop.first %}border-top:1px solid #EFEEE4;{% endif %}">{{ value }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% if qr_cid %}
+<table role="presentation" width="100%" style="margin:0 0 20px;">
+  <tr><td align="center" style="border:2px dashed #C9D8BE;border-radius:18px;padding:20px;">
+    <img src="cid:{{ qr_cid }}" alt="Boarding QR code" width="190" height="190" style="display:block;width:190px;height:190px;" />
+    <div style="margin-top:10px;font-size:12px;color:#8A918D;">Ref {{ booking.booking_ref }}</div>
+  </td></tr>
+</table>
+{% endif %}
+
+<table role="presentation" width="100%"><tr><td align="center">
+  <a href="{{ company.web_url }}/manage?ref={{ booking.booking_ref }}"
+     style="display:inline-block;background:#2F5233;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:13px 28px;border-radius:999px;">
+    Open my ticket
+  </a>
+</td></tr></table>
+{% endblock %}
