@@ -77,6 +77,17 @@ class BookingStatus(StrEnum):
     CHECKED_IN = "checked_in"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
+    REFUNDED = "refunded"
+
+
+class PaymentMethod(StrEnum):
+    PAYSTACK = "paystack"
+    CASH = "cash"
+    BANK_TRANSFER = "bank_transfer"
+    POS = "pos"
+    SUBSCRIPTION = "subscription"
+    COMPLIMENTARY = "complimentary"
 
 
 #: Statuses that still occupy a seat on the vehicle.
@@ -121,7 +132,9 @@ class NotificationChannel(StrEnum):
 class NotificationType(StrEnum):
     CONFIRMATION = "confirmation"
     REMINDER_24H = "reminder_24h"
+    REMINDER_3H = "reminder_3h"
     REMINDER_2H = "reminder_2h"
+    REMINDER_1H = "reminder_1h"
     SCHEDULE_CHANGE = "schedule_change"
     CANCELLATION = "cancellation"
     OTP = "otp"

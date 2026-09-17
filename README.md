@@ -104,7 +104,7 @@ Switch to live by setting real keys and `PAYSTACK_MOCK=false`, `EMAIL_PROVIDER=s
 | `TICKET_HMAC_SECRET` | Rotating it **invalidates every already-issued QR ticket** |
 | `SERVICE_API_KEY` | `ecojindu-api` sends this as `X-Service-Key` to reach `/v1/**/internal/**` |
 | `SEAT_HOLD_MINUTES` | How long a pending-payment booking keeps its seats (default 15) |
-| `CORS_ORIGINS` | Comma-separated. Must list both frontends |
+| `CORS_ORIGINS` | Comma-separated browser origins for `ecojindu-web` + `ecojindu-admin`. Production must list the live Cloud Run URLs (project-number and hash-style hosts are different origins), not just localhost |
 
 Email works with any SMTP provider:
 
@@ -221,13 +221,14 @@ gcloud run deploy ecojindu-backend \
   --platform managed \
   --allow-unauthenticated \
   --add-cloudsql-instances $PROJECT:$REGION:ecojindu-pg \
-  --set-env-vars "ENVIRONMENT=production,DEBUG=false,LOG_JSON=true,PAYSTACK_MOCK=false" \
+  --set-env-vars "^|^ENVIRONMENT=production|DEBUG=false|LOG_JSON=true|PAYSTACK_MOCK=false|CORS_ORIGINS=https://ecojindu-web-480235407496.us-central1.run.app,https://ecojindu-web-d7apfb4v6q-uc.a.run.app,https://ecojindu-admin-480235407496.us-central1.run.app,https://ecojindu-admin-d7apfb4v6q-uc.a.run.app,https://ecojindu.ng,https://www.ecojindu.ng,https://admin.ecojindu.ng|WEB_BASE_URL=https://ecojindu-web-480235407496.us-central1.run.app" \
   --set-secrets "DATABASE_URL=ecojindu-db-url:latest,JWT_SECRET=ecojindu-jwt:latest,TICKET_HMAC_SECRET=ecojindu-ticket-hmac:latest,PAYSTACK_SECRET_KEY=paystack-secret:latest,SERVICE_API_KEY=ecojindu-service-key:latest" \
   --min-instances 1 --max-instances 10 --cpu 1 --memory 512Mi
 ```
 
 Notes:
 
+* **`CORS_ORIGINS` is required on Cloud Run.** If it is missing, the image falls back to localhost-only (or the baked-in default) and the browser blocks `/v1/routes` with a preflight `Access-Control-Allow-Origin` failure. Updating the env var creates a new revision — a full image rebuild is not required for CORS alone.
 * Set `LOG_JSON=true` — the logger emits Cloud Logging's `severity` / `message` shape.
 * Use Cloud SQL for Postgres; connect over the Unix socket
   (`postgresql+asyncpg://user:pass@/ecojindu?host=/cloudsql/<connection-name>`).

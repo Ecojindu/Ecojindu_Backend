@@ -68,7 +68,7 @@ async def issue_ticket(db: AsyncSession, booking: Booking, trip: Trip) -> Ticket
     path = _storage_dir() / filename
     path.write_bytes(png)
 
-    url = f"{settings.PUBLIC_BASE_URL}/v1/tickets/{booking.booking_ref}/qr.png"
+    url = f"{settings.PUBLIC_BASE_URL}/v1/tickets/{booking.booking_ref}/qr.png?token={token}"
 
     existing = (
         await db.execute(select(Ticket).where(Ticket.booking_id == booking.id))

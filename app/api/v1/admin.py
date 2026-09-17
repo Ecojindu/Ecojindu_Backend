@@ -23,17 +23,24 @@ from app.models.subscription import Subscription, SubscriptionPlan
 from app.models.trip import Trip, TripTemplate
 from app.models.user import Driver, User
 from app.schemas.auth import UserOut
-from app.schemas.booking import AdminBookingCreate, BookingOut
+from app.schemas.booking import (
+    AdminBookingCreate,
+    BookingOut,
+    CancelBookingRequest,
+    RefundBookingRequest,
+    RescheduleBookingRequest,
+)
 from app.schemas.catalog import (
     DriverIn,
-    RouteAdminOut,
     DriverOut,
     DriverUpdate,
+    RouteAdminOut,
     RouteIn,
     RouteOut,
     RouteStopIn,
     RouteStopOut,
     RouteUpdate,
+    StaffCreate,
     TripTemplateIn,
     TripTemplateOut,
     TripTemplateUpdate,
@@ -631,6 +638,42 @@ async def admin_list_trips(
     return await _trip_admin_out(db, trips)
 
 
+async def assert_no_schedule_conflict(
+    db: AsyncSession,
+    *,
+    departure_datetime: datetime,
+    arrival_estimate: datetime,
+    vehicle_id: uuid.UUID | None = None,
+    driver_id: uuid.UUID | None = None,
+    exclude_trip_id: uuid.UUID | None = None,
+) -> None:
+    if not vehicle_id and not driver_id:
+        return
+
+    conditions = []
+    if vehicle_id:
+        conditions.append(Trip.vehicle_id == vehicle_id)
+    if driver_id:
+        conditions.append(Trip.driver_id == driver_id)
+
+    stmt = select(Trip).where(
+        Trip.status != TripStatus.CANCELLED,
+        Trip.departure_datetime < arrival_estimate,
+        Trip.arrival_estimate > departure_datetime,
+        or_(*conditions),
+    )
+    if exclude_trip_id:
+        stmt = stmt.where(Trip.id != exclude_trip_id)
+
+    conflict = (await db.execute(stmt)).scalars().first()
+    if conflict:
+        conflict_type = "Vehicle" if conflict.vehicle_id == vehicle_id else "Driver"
+        raise ConflictError(
+            f"{conflict_type} is already assigned to another departure between "
+            f"{fmt_datetime(conflict.departure_datetime)} and {fmt_datetime(conflict.arrival_estimate)}."
+        )
+
+
 @router.post("/trips", response_model=TripAdminOut, status_code=status.HTTP_201_CREATED)
 async def create_trip(payload: TripCreate, db: DbSession, admin: AdminUser) -> TripAdminOut:
     route = await db.get(Route, payload.route_id)
@@ -643,11 +686,21 @@ async def create_trip(payload: TripCreate, db: DbSession, admin: AdminUser) -> T
         capacity = vehicle.seat_capacity if vehicle else 14
 
     departure = payload.departure_datetime
+    arrival = departure + timedelta(minutes=route.duration_mins)
+
+    await assert_no_schedule_conflict(
+        db,
+        departure_datetime=departure,
+        arrival_estimate=arrival,
+        vehicle_id=payload.vehicle_id,
+        driver_id=payload.driver_id,
+    )
+
     trip = Trip(
         route_id=route.id,
         service_date=departure.astimezone(LAGOS).date(),
         departure_datetime=departure,
-        arrival_estimate=departure + timedelta(minutes=route.duration_mins),
+        arrival_estimate=arrival,
         vehicle_id=payload.vehicle_id,
         driver_id=payload.driver_id,
         status=TripStatus.SCHEDULED,
@@ -681,14 +734,28 @@ async def update_trip(
             )
 
     old_departure = trip.departure_datetime
+    route = await db.get(Route, trip.route_id)
+    new_departure = data.get("departure_datetime", trip.departure_datetime)
+    new_arrival = new_departure + timedelta(minutes=route.duration_mins) if route else trip.arrival_estimate
+    new_vehicle_id = data.get("vehicle_id", trip.vehicle_id)
+    new_driver_id = data.get("driver_id", trip.driver_id)
+
+    await assert_no_schedule_conflict(
+        db,
+        departure_datetime=new_departure,
+        arrival_estimate=new_arrival,
+        vehicle_id=new_vehicle_id,
+        driver_id=new_driver_id,
+        exclude_trip_id=trip.id,
+    )
+
     for key, value in data.items():
         if value is not None:
             setattr(trip, key, value)
 
     if "departure_datetime" in data and data["departure_datetime"]:
         trip.service_date = trip.departure_datetime.astimezone(LAGOS).date()
-        route = await db.get(Route, trip.route_id)
-        trip.arrival_estimate = trip.departure_datetime + timedelta(minutes=route.duration_mins)
+        trip.arrival_estimate = new_arrival
 
     await db.flush()
 
@@ -917,6 +984,8 @@ async def admin_create_booking(
         pickup_stop_id=payload.pickup_stop_id,
         notes=payload.notes,
         amount_kobo_override=payload.amount_kobo_override,
+        payment_method=payload.payment_method,
+        payment_reference=payload.payment_reference,
     )
 
     if payload.mark_confirmed:
@@ -928,9 +997,9 @@ async def admin_create_booking(
         db, actor=admin, action="booking.create", entity_type="booking",
         entity_id=booking.id, entity_label=booking.booking_ref, request=request,
         summary=(
-            f"Created booking {booking.booking_ref} at the desk for {booking.passenger_name} "
-            f"({booking.seats} seat(s), {naira(booking.amount_kobo)})"
-            + (", marked as already paid." if payload.mark_confirmed else ", awaiting payment.")
+            f"Created desk booking {booking.booking_ref} for {booking.passenger_name} "
+            f"({booking.seats} seat(s), {naira(booking.amount_kobo)}, method: {payload.payment_method})"
+            + (", marked as settled." if payload.mark_confirmed else ", awaiting payment.")
         ),
     )
     await db.commit()
@@ -944,7 +1013,7 @@ async def admin_create_booking(
 
 @router.post("/bookings/{booking_ref}/confirm", response_model=Message, summary="Force-confirm a booking")
 async def admin_confirm_booking(
-    booking_ref: str, db: DbSession, admin: AdminUser, request: Request
+    booking_ref: str, db: DbSession, admin: AdminUser, request: Request, reason: str | None = None
 ) -> Message:
     booking = await booking_service.get_booking_by_ref(db, booking_ref)
     await booking_service.confirm_booking(db, booking)
@@ -952,12 +1021,157 @@ async def admin_confirm_booking(
         db, actor=admin, action="booking.confirm", entity_type="booking",
         entity_id=booking.id, entity_label=booking.booking_ref, request=request,
         summary=(
-            f"Force-confirmed {booking.booking_ref} without an online payment "
-            f"({naira(booking.amount_kobo)}) and issued the ticket."
+            f"Force-confirmed {booking.booking_ref} without online payment "
+            f"({naira(booking.amount_kobo)}) and issued ticket. Reason: {reason or 'Manual desk override'}"
         ),
     )
     await db.commit()
     return Message(message=f"{booking.booking_ref} confirmed and ticket issued.")
+
+
+@router.post(
+    "/bookings/{booking_id}/reschedule",
+    response_model=BookingOut,
+    summary="Reschedule a booking to another trip",
+)
+async def admin_reschedule_booking(
+    booking_id: uuid.UUID,
+    payload: RescheduleBookingRequest,
+    db: DbSession,
+    admin: AdminUser,
+    request: Request,
+) -> BookingOut:
+    booking = await db.get(Booking, booking_id)
+    if booking is None:
+        raise NotFoundError("That booking could not be found.")
+
+    booking = await booking_service.reschedule_booking(
+        db,
+        booking,
+        new_trip_id=payload.new_trip_id,
+        reason=payload.reason,
+        new_seat_numbers=payload.seat_numbers if payload.seat_numbers else None,
+    )
+    await audit_service.record(
+        db, actor=admin, action="booking.reschedule", entity_type="booking",
+        entity_id=booking.id, entity_label=booking.booking_ref, request=request,
+        summary=f"Rescheduled {booking.booking_ref} to trip {payload.new_trip_id}. Reason: {payload.reason}",
+    )
+    await db.commit()
+    await db.refresh(booking)
+
+    out = BookingOut.model_validate(booking)
+    trip = await db.get(Trip, booking.trip_id)
+    out.trip = to_trip_out(trip, await db.get(Route, trip.route_id))
+    return out
+
+
+@router.post(
+    "/bookings/{booking_id}/cancel",
+    response_model=BookingOut,
+    summary="Cancel a booking with a recorded operational reason",
+)
+async def admin_cancel_booking(
+    booking_id: uuid.UUID,
+    payload: CancelBookingRequest,
+    db: DbSession,
+    admin: AdminUser,
+    request: Request,
+) -> BookingOut:
+    booking = await db.get(Booking, booking_id)
+    if booking is None:
+        raise NotFoundError("That booking could not be found.")
+
+    booking = await booking_service.cancel_booking(
+        db,
+        booking,
+        reason=payload.reason,
+        by_admin=True,
+    )
+    await audit_service.record(
+        db, actor=admin, action="booking.cancel", entity_type="booking",
+        entity_id=booking.id, entity_label=booking.booking_ref, request=request,
+        summary=f"Cancelled {booking.booking_ref}. Reason: {payload.reason}",
+    )
+    await db.commit()
+    await db.refresh(booking)
+
+    out = BookingOut.model_validate(booking)
+    trip = await db.get(Trip, booking.trip_id)
+    out.trip = to_trip_out(trip, await db.get(Route, trip.route_id))
+    return out
+
+
+@router.post(
+    "/bookings/{booking_id}/refund",
+    response_model=BookingOut,
+    summary="Refund a booking with amount and method recorded in audit logs",
+)
+async def admin_refund_booking(
+    booking_id: uuid.UUID,
+    payload: RefundBookingRequest,
+    db: DbSession,
+    admin: AdminUser,
+    request: Request,
+) -> BookingOut:
+    booking = await db.get(Booking, booking_id)
+    if booking is None:
+        raise NotFoundError("That booking could not be found.")
+
+    booking = await booking_service.refund_booking(
+        db,
+        booking,
+        amount_kobo=payload.amount_kobo,
+        reason=payload.reason,
+        refund_method=payload.refund_method,
+    )
+    await audit_service.record(
+        db, actor=admin, action="booking.refund", entity_type="booking",
+        entity_id=booking.id, entity_label=booking.booking_ref, request=request,
+        summary=f"Refunded {booking.booking_ref} via {payload.refund_method}. Reason: {payload.reason}",
+    )
+    await db.commit()
+    await db.refresh(booking)
+
+    out = BookingOut.model_validate(booking)
+    trip = await db.get(Trip, booking.trip_id)
+    out.trip = to_trip_out(trip, await db.get(Route, trip.route_id))
+    return out
+
+
+@router.post(
+    "/bookings/{booking_id}/no-show",
+    response_model=BookingOut,
+    summary="Mark a booking passenger as no-show",
+)
+async def admin_mark_no_show(
+    booking_id: uuid.UUID,
+    payload: CancelBookingRequest,
+    db: DbSession,
+    admin: AdminUser,
+    request: Request,
+) -> BookingOut:
+    booking = await db.get(Booking, booking_id)
+    if booking is None:
+        raise NotFoundError("That booking could not be found.")
+
+    booking = await booking_service.mark_no_show(
+        db,
+        booking,
+        reason=payload.reason,
+    )
+    await audit_service.record(
+        db, actor=admin, action="booking.no_show", entity_type="booking",
+        entity_id=booking.id, entity_label=booking.booking_ref, request=request,
+        summary=f"Marked {booking.booking_ref} as No-Show. Reason: {payload.reason}",
+    )
+    await db.commit()
+    await db.refresh(booking)
+
+    out = BookingOut.model_validate(booking)
+    trip = await db.get(Trip, booking.trip_id)
+    out.trip = to_trip_out(trip, await db.get(Route, trip.route_id))
+    return out
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1052,12 +1266,12 @@ async def list_users(
     summary="Create an operations or super-admin account",
 )
 async def create_staff(
-    payload: DriverIn,
+    payload: StaffCreate,
     db: DbSession,
     admin: SuperAdminUser,
     request: Request,
-    role: str = Query(UserRole.OPERATIONS),
 ) -> UserOut:
+    role = payload.role
     if role not in {UserRole.OPERATIONS, UserRole.SUPER_ADMIN}:
         raise ValidationError("Role must be `operations` or `super_admin`.")
     clash = (
@@ -1065,6 +1279,13 @@ async def create_staff(
     ).unique().scalar_one_or_none()
     if clash:
         raise ConflictError("An account already uses that phone number.")
+
+    if payload.email:
+        email_clash = (
+            await db.execute(select(User).where(User.email == payload.email))
+        ).unique().scalar_one_or_none()
+        if email_clash:
+            raise ConflictError("An account already uses that email address.")
 
     user = User(
         full_name=payload.full_name,

@@ -41,6 +41,8 @@ timetable scheduler.
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.execute(text("SELECT 1"))
+        from app.models import Base
+        await conn.run_sync(Base.metadata.create_all)
     log_event(
         logger,
         logging.INFO,
@@ -74,6 +76,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    # Custom domains under ecojindu.ng (apex is listed explicitly in CORS_ORIGINS).
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*ecojindu\.ng",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

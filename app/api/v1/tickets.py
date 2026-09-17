@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request, Response
 
-from app.api.deps import DbSession, StaffUser
-from app.core.errors import NotFoundError
+from app.api.deps import DbSession, OptionalUser, StaffUser
+from app.core.errors import ForbiddenError, NotFoundError
+from app.core.security import constant_time_equals, parse_qr_token, verify_ticket_signature
 from app.core.timeutil import fmt_datetime
+from app.models.enums import UserRole
 from app.models.route import Route
 from app.models.trip import Trip
 from app.schemas.booking import ValidateTicketRequest, ValidateTicketResponse
@@ -22,11 +24,39 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
     summary="The boarding-pass QR image",
     responses={200: {"content": {"image/png": {}}, "description": "PNG QR code"}},
 )
-async def ticket_qr(booking_ref: str, db: DbSession) -> Response:
+async def ticket_qr(
+    booking_ref: str,
+    db: DbSession,
+    user: OptionalUser = None,
+    token: str | None = None,
+) -> Response:
     booking = await get_booking_by_ref(db, booking_ref)
     ticket = await get_ticket(db, booking)
     if ticket is None:
         raise NotFoundError("No ticket has been issued for this booking yet.")
+
+    authorized = False
+    if user:
+        if user.role in {UserRole.OPERATIONS, UserRole.SUPER_ADMIN, UserRole.DRIVER}:
+            authorized = True
+        elif booking.user_id and booking.user_id == user.id:
+            authorized = True
+
+    if not authorized and token:
+        token_clean = token.strip()
+        if token_clean == ticket.qr_token or constant_time_equals(token_clean, ticket.qr_signature):
+            authorized = True
+        elif token_clean.startswith("EJS1."):
+            try:
+                payload, sig = parse_qr_token(token_clean)
+                if verify_ticket_signature(payload, sig) and payload.get("ref") == booking.booking_ref:
+                    authorized = True
+            except Exception:
+                pass
+
+    if not authorized:
+        raise ForbiddenError("You do not have permission to view this ticket QR code.")
+
     png = read_ticket_png(ticket)
     return Response(
         content=png,

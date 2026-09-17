@@ -159,7 +159,7 @@ async def refresh(payload: RefreshRequest, db: DbSession) -> TokenPair:
     "/otp/request",
     response_model=Message,
     summary="Send a 6-digit SMS verification code",
-    dependencies=[Depends(RateLimiter("otp", limit=5))],
+    dependencies=[Depends(RateLimiter("otp", limit=3, window_seconds=600))],
 )
 async def request_otp(payload: RequestOtp, db: DbSession) -> Message:
     code = generate_otp()

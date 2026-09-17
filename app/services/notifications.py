@@ -198,14 +198,31 @@ async def send_booking_confirmation(
 async def send_trip_reminder(
     db: AsyncSession, booking: Booking, trip: Trip, route: Route, window: str
 ) -> None:
-    """`window` is '24h' or '2h'."""
+    """`window` is e.g. '24h', '3h', '2h', or '1h'."""
+    from app.services.reminders import notification_type_for_window
+
     view = build_trip_view(trip, route)
-    ntype = NotificationType.REMINDER_24H if window == "24h" else NotificationType.REMINDER_2H
+    ntype = notification_type_for_window(window)
     user = await db.get(User, booking.user_id) if booking.user_id else None
 
     ticket = (
         await db.execute(select(Ticket).where(Ticket.booking_id == booking.id))
     ).scalar_one_or_none()
+
+    headlines = {
+        "24h": "You travel tomorrow",
+        "3h": "Departing in 3 hours",
+        "2h": "Departing in 2 hours",
+        "1h": "Departing in 1 hour",
+    }
+    sms_leads = {
+        "24h": "Reminder: you travel tomorrow",
+        "3h": "Your Ecojindu shuttle departs in 3 hours",
+        "2h": "Your Ecojindu shuttle departs in 2 hours",
+        "1h": "Your Ecojindu shuttle departs in 1 hour",
+    }
+    headline = headlines.get(window, f"Departing in {window}")
+    sms_lead = sms_leads.get(window, f"Your Ecojindu shuttle departs in {window}")
 
     if booking.passenger_email and (user is None or user.notify_email):
         images: list[InlineImage] = []
@@ -219,7 +236,6 @@ async def send_trip_reminder(
             except Exception:  # noqa: BLE001
                 qr_cid = None
 
-        headline = "Departing in 2 hours" if window == "2h" else "You travel tomorrow"
         subject = f"{headline} · {view.time_label} to {view.destination} · {booking.booking_ref}"
         html = render_template(
             "trip_reminder.html",
@@ -246,9 +262,8 @@ async def send_trip_reminder(
         )
 
     if booking.passenger_phone and (user is None or user.notify_sms):
-        lead = "Your Ecojindu shuttle departs in 2 hours" if window == "2h" else "Reminder: you travel tomorrow"
         body = (
-            f"{lead}.\n"
+            f"{sms_lead}.\n"
             f"Ref {booking.booking_ref} | {view.origin} -> {view.destination}\n"
             f"{view.date_label} {view.time_label}\n"
             f"Arrive 20 mins early with your QR ticket."

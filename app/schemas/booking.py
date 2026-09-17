@@ -48,6 +48,9 @@ class AdminBookingCreate(BookingCreate):
     #: Admin-made bookings skip the payment step when marked as settled offline.
     mark_confirmed: bool = False
     amount_kobo_override: int | None = Field(default=None, ge=0)
+    payment_method: str = Field(default="cash", max_length=32)
+    payment_reference: str | None = Field(default=None, max_length=128)
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class SubscriptionBookingCreate(PhoneMixin, SexCountsMixin):
@@ -93,6 +96,9 @@ class BookingOut(ORMModel):
     amount_kobo: int
     source: str
     status: str
+    payment_method: str | None = None
+    payment_reference: str | None = None
+    rescheduled_from_booking_id: uuid.UUID | None = None
     hold_expires_at: datetime | None
     confirmed_at: datetime | None
     cancelled_at: datetime | None
@@ -123,7 +129,19 @@ class BookingLookup(PhoneMixin):
 
 
 class CancelBookingRequest(BaseModel):
-    reason: str | None = Field(default=None, max_length=500)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class RescheduleBookingRequest(BaseModel):
+    new_trip_id: uuid.UUID
+    seat_numbers: list[str] = Field(default_factory=list)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class RefundBookingRequest(BaseModel):
+    amount_kobo: int | None = Field(default=None, ge=0)
+    reason: str = Field(min_length=3, max_length=500)
+    refund_method: str = Field(default="paystack", max_length=32)
 
 
 class ResendTicketRequest(BaseModel):

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import time
+from datetime import date, time
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -95,6 +95,9 @@ class VehicleIn(BaseModel):
     model: str = "Wuling EV Minibus"
     seat_capacity: int = Field(default=14, ge=1, le=60)
     range_km: int = Field(default=300, ge=0)
+    battery_level_pct: int | None = Field(default=None, ge=0, le=100)
+    odometer_km: int | None = Field(default=None, ge=0)
+    next_maintenance_date: date | None = None
     status: str = "active"
     photo_url: str | None = None
     notes: str | None = None
@@ -106,6 +109,9 @@ class VehicleUpdate(BaseModel):
     model: str | None = None
     seat_capacity: int | None = Field(default=None, ge=1, le=60)
     range_km: int | None = Field(default=None, ge=0)
+    battery_level_pct: int | None = Field(default=None, ge=0, le=100)
+    odometer_km: int | None = Field(default=None, ge=0)
+    next_maintenance_date: date | None = None
     status: str | None = None
     photo_url: str | None = None
     notes: str | None = None
@@ -118,6 +124,9 @@ class VehicleOut(ORMModel):
     model: str
     seat_capacity: int
     range_km: int
+    battery_level_pct: int | None
+    odometer_km: int | None
+    next_maintenance_date: date | None
     status: str
     photo_url: str | None
     notes: str | None
@@ -158,6 +167,15 @@ class DriverOut(ORMModel):
     assigned_vehicle_name: str | None = None
     status: str
     is_active: bool = True
+
+
+# ── Staff Users ──────────────────────────────────────────────
+class StaffCreate(PhoneMixin):
+    full_name: str = Field(min_length=2, max_length=160)
+    phone: str
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(default="operations", pattern="^(operations|super_admin)$")
 
 
 # ── Timetable templates ──────────────────────────────────────

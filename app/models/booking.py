@@ -61,6 +61,9 @@ class Booking(Base, TimestampMixin):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    rescheduled_from_booking_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     pickup_stop_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("route_stops.id", ondelete="SET NULL"), nullable=True
     )

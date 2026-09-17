@@ -8,8 +8,11 @@ from app.api.v1 import (
     catalog,
     charter,
     driver,
+    flights,
+    internal_jobs,
     payments,
     subscriptions,
+    ticket_reading,
     tickets,
 )
 
@@ -24,5 +27,8 @@ api_router.include_router(subscriptions.router)
 api_router.include_router(charter.router)
 api_router.include_router(admin.router)
 api_router.include_router(driver.router)
+api_router.include_router(ticket_reading.router)
+api_router.include_router(flights.router)
+api_router.include_router(internal_jobs.router)
 
 __all__ = ["api_router"]

@@ -20,6 +20,9 @@ bcrypt==4.2.1
 
 # HTTP / integrations
 httpx==0.28.1
+anthropic==0.49.0
+# Optional (only needed when CLOUD_TASKS_ENABLED=true):
+# google-cloud-tasks>=2.16.0
 
 # QR codes + images
 qrcode==8.0

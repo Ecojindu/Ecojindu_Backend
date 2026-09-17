@@ -1,16 +1,15 @@
 """APScheduler background jobs.
 
-Five jobs run inside the backend process:
-
 | Job                    | Cadence            | What it does                                   |
 |------------------------|--------------------|------------------------------------------------|
 | release_holds          | every minute       | Returns seats from abandoned checkouts         |
-| reminder_24h           | every 15 minutes   | Emails + texts passengers a day before travel  |
-| reminder_2h            | every 10 minutes   | Final call before departure                    |
+| reminder_*             | every 10–15 min    | Emails + texts at each REMINDER_OFFSETS_HOURS  |
 | generate_trips         | 00:20 daily        | Materialises the next 14 days of the timetable |
 | subscription_hygiene   | 01:00 daily        | Expiry warnings and status transitions         |
 
 Every job is idempotent, so a missed or repeated fire is harmless.
+When CLOUD_TASKS_ENABLED is true, reminder delivery is driven by Cloud Tasks
+instead; the poller jobs are still registered as a safety net.
 """
 from __future__ import annotations
 
@@ -29,7 +28,6 @@ from app.db.session import session_scope
 from app.models.booking import Booking
 from app.models.enums import (
     BookingStatus,
-    NotificationType,
     SubscriptionStatus,
     TripStatus,
 )
@@ -40,6 +38,7 @@ from app.models.trip import Trip
 from app.models.user import User
 from app.services import notifications as notification_service
 from app.services import payments as payment_service
+from app.services.reminders import notification_type_for_window, window_label
 from app.services.trips import complete_finished_trips, generate_trips_from_templates, release_expired_holds
 
 logger = logging.getLogger("ecojindu.jobs")
@@ -67,7 +66,7 @@ async def _already_notified(db, booking_id, ntype: str) -> bool:
 
 async def _send_reminders(window: str, lead: timedelta, slack: timedelta) -> int:
     """Notify bookings whose departure falls inside [now+lead, now+lead+slack)."""
-    ntype = NotificationType.REMINDER_24H if window == "24h" else NotificationType.REMINDER_2H
+    ntype = notification_type_for_window(window)
     now = now_utc()
     lower, upper = now + lead, now + lead + slack
 
@@ -100,13 +99,24 @@ async def _send_reminders(window: str, lead: timedelta, slack: timedelta) -> int
     return sent
 
 
+def _slack_for_hours(hours: float) -> timedelta:
+    if hours >= 12:
+        return timedelta(minutes=15)
+    return timedelta(minutes=10)
+
+
+async def job_reminder_offset(hours: float) -> None:
+    window = window_label(hours)
+    await _send_reminders(window, timedelta(hours=hours), _slack_for_hours(hours))
+
+
+# Keep named entry-points for backwards compatibility / manual triggers.
 async def job_reminder_24h() -> None:
-    # Fires every 15 minutes with a 15-minute window, so each booking is caught once.
-    await _send_reminders("24h", timedelta(hours=24), timedelta(minutes=15))
+    await job_reminder_offset(24)
 
 
 async def job_reminder_2h() -> None:
-    await _send_reminders("2h", timedelta(hours=2), timedelta(minutes=10))
+    await job_reminder_offset(2)
 
 
 async def job_generate_trips() -> None:
@@ -175,8 +185,23 @@ def start_scheduler() -> AsyncIOScheduler | None:
 
     scheduler = AsyncIOScheduler(timezone=LAGOS)
     scheduler.add_job(job_release_holds, IntervalTrigger(minutes=1), id="release_holds", replace_existing=True)
-    scheduler.add_job(job_reminder_24h, IntervalTrigger(minutes=15), id="reminder_24h", replace_existing=True)
-    scheduler.add_job(job_reminder_2h, IntervalTrigger(minutes=10), id="reminder_2h", replace_existing=True)
+
+    # One poller per configured reminder offset (24 / 3 / 1 by default).
+    # Also keep the legacy 2h window so older bookings still get a final call.
+    offsets = list(settings.reminder_offsets_hours)
+    if 2.0 not in offsets and 2 not in offsets:
+        offsets.append(2.0)
+    for hours in offsets:
+        job_id = f"reminder_{window_label(hours)}"
+        interval = 15 if hours >= 12 else 10
+        scheduler.add_job(
+            job_reminder_offset,
+            IntervalTrigger(minutes=interval),
+            id=job_id,
+            replace_existing=True,
+            kwargs={"hours": float(hours)},
+        )
+
     scheduler.add_job(
         job_generate_trips, CronTrigger(hour=0, minute=20), id="generate_trips", replace_existing=True
     )

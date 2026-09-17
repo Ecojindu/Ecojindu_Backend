@@ -75,10 +75,40 @@ class Settings(BaseSettings):
     # ── Scheduler ─────────────────────────────────────────────
     SCHEDULER_ENABLED: bool = True
     TRIP_GENERATION_DAYS_AHEAD: int = 14
-    SEAT_HOLD_MINUTES: int = 15
+    SEAT_HOLD_MINUTES: int = 10
+
+    # ── Upload & Go / ticket reading ──────────────────────────
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    CHECK_IN_BUFFER_HOURS: float = 2.5
+    TICKET_READ_MAX_BYTES: int = 10 * 1024 * 1024
+    TICKET_READ_RATE_LIMIT_PER_MINUTE: int = 10
+    #: Comma-separated hours before trip departure to send reminders.
+    REMINDER_OFFSETS_HOURS: str = "24,3,1"
+
+    # ── Cloud Tasks (reminder delivery; falls back to APScheduler) ──
+    CLOUD_TASKS_ENABLED: bool = False
+    CLOUD_TASKS_PROJECT: str = ""
+    CLOUD_TASKS_LOCATION: str = "us-central1"
+    CLOUD_TASKS_QUEUE: str = "ecojindu-reminders"
+    #: Public URL that receives task POSTs (e.g. https://api.example.com).
+    CLOUD_TASKS_SERVICE_URL: str = ""
+
+    # ── Flight status ─────────────────────────────────────────
+    AVIATIONSTACK_API_KEY: str = ""
 
     # ── CORS ──────────────────────────────────────────────────
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    # Comma-separated browser origins. Localhost alone is not enough for Cloud
+    # Run — include every deployed web/admin hostname (project-number and
+    # hash-style *.run.app URLs are distinct origins). Override via env in prod.
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,http://localhost:3001,"
+        "https://ecojindu-web-480235407496.us-central1.run.app,"
+        "https://ecojindu-web-d7apfb4v6q-uc.a.run.app,"
+        "https://ecojindu-admin-480235407496.us-central1.run.app,"
+        "https://ecojindu-admin-d7apfb4v6q-uc.a.run.app,"
+        "https://ecojindu.ng,https://www.ecojindu.ng,https://admin.ecojindu.ng"
+    )
 
     # ── Rate limiting ─────────────────────────────────────────
     RATE_LIMIT_ENABLED: bool = True
@@ -110,6 +140,20 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def reminder_offsets_hours(self) -> list[float]:
+        """Parse REMINDER_OFFSETS_HOURS into a list of floats (hours before departure)."""
+        offsets: list[float] = []
+        for part in self.REMINDER_OFFSETS_HOURS.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                offsets.append(float(part))
+            except ValueError:
+                continue
+        return offsets or [24.0, 3.0, 1.0]
 
 
 @lru_cache

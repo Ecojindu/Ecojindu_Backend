@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import timedelta
 
 from app.core.security import (
@@ -15,6 +16,10 @@ from app.core.timeutil import combine_lagos, now_utc, today_lagos
 from app.models.enums import BookingStatus, TripStatus
 from app.services.bookings import confirm_booking, create_booking
 from app.services.tickets import build_ticket_payload, issue_ticket, validate_and_check_in
+
+
+def _phone() -> str:
+    return f"+23481{uuid.uuid4().int % 100_000_000:08d}"
 
 
 def test_signature_round_trips():
@@ -74,7 +79,7 @@ async def test_issue_and_validate_ticket_checks_passenger_in(db, route, vehicle)
 
     booking = await create_booking(
         db, trip_id=trip.id, passenger_name="Ifeanyi Duru",
-        passenger_phone="+2348123334455", passenger_email="ifeanyi@example.com", seats=1,
+        passenger_phone=_phone(), passenger_email="ifeanyi@example.com", seats=1,
     )
     await confirm_booking(db, booking, send_notifications=False)
     await db.commit()
@@ -115,7 +120,7 @@ async def test_forged_ticket_is_refused(db, route, vehicle):
     await db.commit()
 
     booking = await create_booking(
-        db, trip_id=trip.id, passenger_name="Forger", passenger_phone="+2348100000077",
+        db, trip_id=trip.id, passenger_name="Forger", passenger_phone=_phone(),
         passenger_email=None, seats=1,
     )
     await confirm_booking(db, booking, send_notifications=False)
@@ -139,7 +144,7 @@ async def test_forged_ticket_is_refused(db, route, vehicle):
 async def test_ticket_for_another_day_is_refused(db, trip):
     """`trip` departs tomorrow — scanning it today must fail."""
     booking = await create_booking(
-        db, trip_id=trip.id, passenger_name="Early Bird", passenger_phone="+2348100000088",
+        db, trip_id=trip.id, passenger_name="Early Bird", passenger_phone=_phone(),
         passenger_email=None, seats=1,
     )
     await confirm_booking(db, booking, send_notifications=False)
@@ -168,7 +173,7 @@ async def test_unpaid_booking_cannot_check_in(db, route, vehicle):
     await db.commit()
 
     booking = await create_booking(
-        db, trip_id=trip.id, passenger_name="Unpaid", passenger_phone="+2348100000099",
+        db, trip_id=trip.id, passenger_name="Unpaid", passenger_phone=_phone(),
         passenger_email=None, seats=1,
     )
     ticket = await issue_ticket(db, booking, trip)
@@ -196,7 +201,7 @@ async def test_bare_reference_can_be_typed_in_manually(db, route, vehicle):
     await db.commit()
 
     booking = await create_booking(
-        db, trip_id=trip.id, passenger_name="Cracked Screen", passenger_phone="+2348100000111",
+        db, trip_id=trip.id, passenger_name="Cracked Screen", passenger_phone=_phone(),
         passenger_email=None, seats=1,
     )
     await confirm_booking(db, booking, send_notifications=False)

@@ -15,7 +15,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,9 +85,26 @@ async def create_booking(
     amount_kobo_override: int | None = None,
     seats_male: int = 0,
     seats_female: int = 0,
+    payment_method: str | None = None,
+    payment_reference: str | None = None,
 ) -> Booking:
     """Reserve seats and open a payment hold. Does not take payment."""
     await release_expired_holds(db)
+
+    # Anti-hoarding: prevent more than 2 concurrent unpaid active holds per phone number
+    active_holds_count = (
+        await db.execute(
+            select(func.count(Booking.id)).where(
+                Booking.passenger_phone == passenger_phone,
+                Booking.status == BookingStatus.PENDING_PAYMENT,
+                Booking.hold_expires_at > now_utc(),
+            )
+        )
+    ).scalar_one()
+    if active_holds_count >= 2:
+        raise ConflictError(
+            "You already have active unpaid bookings on hold. Please complete payment or wait for them to expire."
+        )
 
     trip = await lock_trip(db, trip_id)
     assert_trip_bookable(trip, seats)
@@ -113,6 +130,8 @@ async def create_booking(
         hold_expires_at=now_utc() + timedelta(minutes=settings.SEAT_HOLD_MINUTES),
         pickup_stop_id=pickup_stop_id,
         notes=notes,
+        payment_method=payment_method,
+        payment_reference=payment_reference,
     )
     db.add(booking)
 
@@ -168,6 +187,12 @@ async def confirm_booking(
             await notifications.send_booking_confirmation(db, booking, trip, route, ticket)
         except Exception:  # noqa: BLE001 - a notification failure must not undo a paid booking
             logger.exception("confirmation notifications failed for %s", booking.booking_ref)
+        try:
+            from app.services.reminders import schedule_reminders
+
+            await schedule_reminders(db, booking, trip)
+        except Exception:  # noqa: BLE001
+            logger.exception("reminder scheduling failed for %s", booking.booking_ref)
 
     log_event(logger, logging.INFO, "booking confirmed", ref=booking.booking_ref)
     return booking
@@ -212,6 +237,103 @@ async def cancel_booking(
 
     await db.flush()
     log_event(logger, logging.INFO, "booking cancelled", ref=booking.booking_ref, by_admin=by_admin)
+    return booking
+
+
+async def reschedule_booking(
+    db: AsyncSession,
+    booking: Booking,
+    new_trip_id: uuid.UUID,
+    *,
+    reason: str,
+    new_seat_numbers: list[str] | None = None,
+) -> Booking:
+    if booking.status in {BookingStatus.CANCELLED, BookingStatus.REFUNDED, BookingStatus.NO_SHOW}:
+        raise ConflictError(f"Cannot reschedule a booking with status '{booking.status}'.")
+    if booking.status in {BookingStatus.CHECKED_IN, BookingStatus.COMPLETED}:
+        raise ConflictError("This booking has already been travelled and cannot be rescheduled.")
+
+    old_trip = await lock_trip(db, booking.trip_id)
+    new_trip = await lock_trip(db, new_trip_id)
+
+    assert_trip_bookable(new_trip, booking.seats)
+
+    # Free seats on old trip
+    old_trip.seats_booked = max(old_trip.seats_booked - booking.seats, 0)
+
+    # Assign seats on new trip
+    if new_seat_numbers and len(new_seat_numbers) == booking.seats:
+        seats_assigned = new_seat_numbers
+    else:
+        seats_assigned = await allocate_seat_numbers(db, new_trip, booking.seats)
+
+    new_trip.seats_booked += booking.seats
+
+    old_trip_id = booking.trip_id
+    booking.trip_id = new_trip.id
+    booking.seat_numbers = seats_assigned
+    booking.notes = (booking.notes or "") + f" [Rescheduled from trip {old_trip_id}: {reason}]"
+
+    # Re-issue ticket for the new trip if confirmed
+    if booking.status in {BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN}:
+        await issue_ticket(db, booking, new_trip)
+
+    await db.flush()
+    log_event(logger, logging.INFO, "booking rescheduled", ref=booking.booking_ref, new_trip=str(new_trip.id))
+    return booking
+
+
+async def refund_booking(
+    db: AsyncSession,
+    booking: Booking,
+    *,
+    amount_kobo: int | None = None,
+    reason: str,
+    refund_method: str = "paystack",
+) -> Booking:
+    if booking.status == BookingStatus.REFUNDED:
+        return booking
+
+    if booking.status in {BookingStatus.CHECKED_IN, BookingStatus.COMPLETED}:
+        raise ConflictError("Cannot refund a booking that has already been boarded or completed.")
+
+    # Free seats if currently holding seats
+    if booking.status in {BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT}:
+        trip = await lock_trip(db, booking.trip_id)
+        trip.seats_booked = max(trip.seats_booked - booking.seats, 0)
+
+    refund_amt = amount_kobo if amount_kobo is not None else booking.amount_kobo
+    booking.status = BookingStatus.REFUNDED
+    booking.cancelled_at = now_utc()
+    booking.cancellation_reason = f"Refunded via {refund_method} ({refund_amt / 100:.2f} NGN): {reason}"
+
+    # If subscription booking, return credit
+    if booking.subscription_id:
+        await db.execute(
+            update(Subscription)
+            .where(and_(Subscription.id == booking.subscription_id, Subscription.credits_used >= booking.seats))
+            .values(credits_used=Subscription.credits_used - booking.seats, status=SubscriptionStatus.ACTIVE)
+            .execution_options(synchronize_session="fetch")
+        )
+
+    await db.flush()
+    log_event(logger, logging.INFO, "booking refunded", ref=booking.booking_ref, amount=refund_amt)
+    return booking
+
+
+async def mark_no_show(
+    db: AsyncSession,
+    booking: Booking,
+    *,
+    reason: str | None = None,
+) -> Booking:
+    if booking.status not in {BookingStatus.CONFIRMED}:
+        raise ConflictError(f"Cannot mark booking with status '{booking.status}' as no-show.")
+
+    booking.status = BookingStatus.NO_SHOW
+    booking.notes = (booking.notes or "") + f" [Marked No-Show: {reason or 'Passenger did not arrive'}]"
+    await db.flush()
+    log_event(logger, logging.INFO, "booking marked no-show", ref=booking.booking_ref)
     return booking
 
 
