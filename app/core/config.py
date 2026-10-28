@@ -50,10 +50,16 @@ class Settings(BaseSettings):
     PAYSTACK_BASE_URL: str = "https://api.paystack.co"
     PAYSTACK_CALLBACK_URL: str = "http://localhost:3000/booking/callback"
     PAYSTACK_MOCK: bool = True
+    #: When Paystack is mocked, settle the payment immediately on booking
+    #: create so the passenger lands on their QR ticket with no checkout UI.
+    #: Set false if you want the clickable sandbox checkout page instead.
+    PAYSTACK_AUTO_CONFIRM: bool = True
 
     # ── Email ─────────────────────────────────────────────────
     EMAIL_ENABLED: bool = True
-    EMAIL_PROVIDER: Literal["console", "smtp"] = "console"
+    EMAIL_PROVIDER: Literal["console", "smtp", "file"] = "console"
+    #: When EMAIL_PROVIDER=file, HTML emails are written here for local preview.
+    EMAIL_FILE_DIR: str = "./storage/emails"
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""

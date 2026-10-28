@@ -1,15 +1,24 @@
 {% extends "base_email.html" %}
 {% block content %}
+{% set headline =
+  'Departing in 1 hour' if window == '1h' else
+  'Departing in 2 hours' if window == '2h' else
+  'Departing in 3 hours' if window == '3h' else
+  'You travel tomorrow'
+%}
 <p style="margin:0 0 6px;font-size:13px;color:#2BAE8E;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;">
-  {{ 'Departing in 2 hours' if window == '2h' else 'Travelling tomorrow' }}
+  {{ headline }}
 </p>
 <h1 style="margin:0 0 12px;font-size:26px;line-height:1.25;font-weight:800;color:#15181A;letter-spacing:-0.5px;">
   {{ trip.departure_label }} · {{ trip.route_name }}
 </h1>
 <p style="margin:0 0 22px;font-size:15px;line-height:1.65;color:#4A5450;">
   Hi {{ booking.passenger_name.split()[0] }}, a quick reminder about your trip.
-  {% if window == '2h' %}Please head to the terminal now — boarding closes 10 minutes before departure.
-  {% else %}Please arrive 20 minutes early with your QR ticket ready.{% endif %}
+  {% if window in ['1h', '2h', '3h'] %}
+  Please head to the terminal now — boarding closes 10 minutes before departure.
+  {% else %}
+  Please arrive 20 minutes early with your QR ticket ready.
+  {% endif %}
 </p>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E0D2;border-radius:14px;overflow:hidden;margin:0 0 24px;">

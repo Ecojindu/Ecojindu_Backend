@@ -80,6 +80,23 @@ async def create_booking(
     )
 
     payment = await payment_service.initialize_booking_payment(db, booking, payload.passenger_email)
+
+    # Test / sandbox path: Paystack is not live yet. Settle immediately so the
+    # passenger lands on their QR ticket (email + SMS still fire as normal).
+    if settings.PAYSTACK_MOCK and settings.PAYSTACK_AUTO_CONFIRM:
+        await payment_service.simulate_successful_payment(db, payment.paystack_reference)
+        await db.commit()
+        await db.refresh(booking)
+        return BookingCreateResponse(
+            booking=await _hydrate(db, booking),
+            payment=None,
+            hold_expires_at=None,
+            message=(
+                "Test mode: payment skipped. Your ticket is confirmed — "
+                "check email and SMS for the QR boarding pass."
+            ),
+        )
+
     await db.commit()
     await db.refresh(booking)
 

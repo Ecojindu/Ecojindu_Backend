@@ -139,6 +139,7 @@ class NotificationType(StrEnum):
     CANCELLATION = "cancellation"
     OTP = "otp"
     PASSWORD_RESET = "password_reset"
+    WELCOME = "welcome"
     SUBSCRIPTION_ACTIVATED = "subscription_activated"
     SUBSCRIPTION_EXPIRING = "subscription_expiring"
 

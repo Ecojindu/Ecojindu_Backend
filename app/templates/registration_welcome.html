@@ -1,0 +1,48 @@
+{% extends "base_email.html" %}
+{% block content %}
+<p style="margin:0 0 6px;font-size:13px;color:#4C8C2B;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;">Account approved</p>
+<h1 style="margin:0 0 12px;font-size:26px;line-height:1.25;font-weight:800;color:#15181A;letter-spacing:-0.5px;">
+  Welcome aboard, {{ first_name }}.
+</h1>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.65;color:#4A5450;">
+  Your Ecojindu Shuttle passenger account is ready. You can now book seats, save ride credits,
+  and manage trips with the phone number you registered.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E0D2;border-radius:14px;overflow:hidden;margin:0 0 24px;">
+  <tr><td colspan="2" style="background:#2F5233;padding:14px 18px;color:#FFFFFF;font-size:15px;font-weight:700;">Your account</td></tr>
+  <tr>
+    <td style="padding:12px 18px;font-size:13px;color:#8A918D;border-top:1px solid #EFEEE4;width:42%;">Name</td>
+    <td style="padding:12px 18px;font-size:14px;color:#15181A;font-weight:600;border-top:1px solid #EFEEE4;">{{ user.full_name }}</td>
+  </tr>
+  <tr>
+    <td style="padding:12px 18px;font-size:13px;color:#8A918D;border-top:1px solid #EFEEE4;">Phone</td>
+    <td style="padding:12px 18px;font-size:14px;color:#15181A;font-weight:600;border-top:1px solid #EFEEE4;">{{ user.phone }}</td>
+  </tr>
+  {% if user.email %}
+  <tr>
+    <td style="padding:12px 18px;font-size:13px;color:#8A918D;border-top:1px solid #EFEEE4;">Email</td>
+    <td style="padding:12px 18px;font-size:14px;color:#15181A;font-weight:600;border-top:1px solid #EFEEE4;">{{ user.email }}</td>
+  </tr>
+  {% endif %}
+</table>
+
+<table role="presentation" width="100%" style="margin:0 0 16px;"><tr><td align="center">
+  <a href="{{ company.web_url }}/search"
+     style="display:inline-block;background:#4C8C2B;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:14px 30px;border-radius:999px;">
+    Book a shuttle
+  </a>
+</td></tr></table>
+
+<table role="presentation" width="100%"><tr><td align="center">
+  <a href="{{ company.web_url }}/auth/login"
+     style="display:inline-block;color:#2F5233;text-decoration:none;font-weight:700;font-size:14px;padding:8px 16px;">
+    Sign in to your account →
+  </a>
+</td></tr></table>
+
+<p style="margin:24px 0 0;font-size:13px;line-height:1.65;color:#8A918D;">
+  After you book, your QR ticket is emailed here and texted to your phone. We also send a
+  <strong style="color:#4A5450;">1-hour SMS reminder</strong> before departure.
+</p>
+{% endblock %}

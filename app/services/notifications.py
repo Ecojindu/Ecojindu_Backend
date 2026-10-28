@@ -273,7 +273,11 @@ async def send_trip_reminder(
             f"{sms_lead}.\n"
             f"Ref {booking.booking_ref} | {view.origin} -> {view.destination}\n"
             f"{view.date_label} {view.time_label}\n"
-            f"Arrive 20 mins early with your QR ticket."
+            f"Seats: {booking.seats}"
+            + (f" ({', '.join(booking.seat_numbers)})" if booking.seat_numbers else "")
+            + "\n"
+            f"Arrive 20 mins early with your QR ticket.\n"
+            f"{settings.WEB_BASE_URL}/manage?ref={booking.booking_ref}"
         )
         result = await send_sms(booking.passenger_phone, body)
         await _record(
@@ -455,6 +459,43 @@ async def send_subscription_expiring(
             provider=result.provider,
             error=result.error,
         )
+
+
+# ── Registration welcome ─────────────────────────────────────
+
+
+async def send_registration_welcome(db: AsyncSession, user: User) -> None:
+    """Account-approved email to the address the passenger registered with."""
+    if not user.email or not user.notify_email:
+        return
+
+    subject = "Welcome to Ecojindu Shuttle — your account is ready"
+    html = render_template(
+        "registration_welcome.html",
+        subject=subject,
+        user=user,
+        first_name=user.full_name.split()[0] if user.full_name else "there",
+    )
+    text = (
+        f"Hi {user.full_name.split()[0] if user.full_name else 'there'},\n\n"
+        "Your Ecojindu Shuttle account is approved and ready.\n"
+        f"Sign in: {settings.WEB_BASE_URL}/auth/login\n"
+        f"Book a seat: {settings.WEB_BASE_URL}/search\n\n"
+        f"Questions? Call {settings.COMPANY_PHONE} or WhatsApp us."
+    )
+    result = await send_email(user.email, subject, html, text)
+    await _record(
+        db,
+        channel=NotificationChannel.EMAIL,
+        ntype=NotificationType.WELCOME,
+        recipient=user.email,
+        status=NotificationStatus.SENT if result.success else NotificationStatus.FAILED,
+        user_id=user.id,
+        subject=subject,
+        provider=result.provider,
+        provider_message_id=result.message_id,
+        error=result.error,
+    )
 
 
 # ── Transactional one-offs ───────────────────────────────────

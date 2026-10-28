@@ -100,6 +100,7 @@ async def register(payload: RegisterRequest, db: DbSession) -> AuthResponse:
 
     await db.flush()
     user.last_login_at = now_utc()
+    await notifications.send_registration_welcome(db, user)
     await db.commit()
     await db.refresh(user)
     return AuthResponse(user=UserOut.model_validate(user), tokens=_issue_tokens(user))

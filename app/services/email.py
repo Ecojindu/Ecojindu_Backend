@@ -135,5 +135,22 @@ async def send_email(
         )
         return EmailResult(True, "console", message_id=msg["Message-ID"])
 
+    if settings.EMAIL_PROVIDER == "file":
+        out_dir = Path(settings.EMAIL_FILE_DIR)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe = "".join(c if c.isalnum() or c in "-_@" else "_" for c in to)[:48]
+        stamp = make_msgid(domain="ecojindu.ng").strip("<>").replace("@", "_")
+        path = out_dir / f"{stamp}_{safe}.html"
+        path.write_text(html, encoding="utf-8")
+        log_event(
+            logger,
+            logging.INFO,
+            "Email (file)",
+            to=to,
+            subject=subject,
+            path=str(path),
+        )
+        return EmailResult(True, "file", message_id=msg["Message-ID"])
+
     # smtplib is blocking — keep the event loop free.
     return await asyncio.to_thread(_send_smtp_blocking, msg)
