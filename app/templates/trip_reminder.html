@@ -21,10 +21,10 @@
   {% endfor %}
 </table>
 
-{% if qr_cid %}
+{% if qr_url %}
 <table role="presentation" width="100%" style="margin:0 0 20px;">
   <tr><td align="center" style="border:2px dashed #C9D8BE;border-radius:18px;padding:20px;">
-    <img src="cid:{{ qr_cid }}" alt="Boarding QR code" width="190" height="190" style="display:block;width:190px;height:190px;" />
+    <img src="{{ qr_url }}" alt="Boarding QR code" width="190" height="190" style="display:block;width:190px;height:190px;" />
     <div style="margin-top:10px;font-size:12px;color:#8A918D;">Ref {{ booking.booking_ref }}</div>
   </td></tr>
 </table>

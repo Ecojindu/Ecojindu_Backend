@@ -18,10 +18,10 @@
 </table>
 
 <!-- QR -->
-{% if qr_cid %}
+{% if qr_url %}
 <table role="presentation" width="100%" style="margin:0 0 24px;">
   <tr><td align="center" style="background:#FFFFFF;border:2px dashed #C9D8BE;border-radius:18px;padding:22px;">
-    <img src="cid:{{ qr_cid }}" alt="Boarding QR code for {{ booking.booking_ref }}" width="220" height="220" style="display:block;width:220px;height:220px;border-radius:10px;" />
+    <img src="{{ qr_url }}" alt="Boarding QR code for {{ booking.booking_ref }}" width="220" height="220" style="display:block;width:220px;height:220px;border-radius:10px;" />
     <div style="margin-top:12px;font-size:12px;color:#8A918D;">Scan at the Nnenna Otti Bus Terminal gate</div>
   </td></tr>
 </table>

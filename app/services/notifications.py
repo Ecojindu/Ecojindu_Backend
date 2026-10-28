@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,29 @@ class TripView:
     date_label: str
     time_label: str
     duration_mins: int
+
+
+def _qr_image_url(booking: Booking, ticket: Ticket) -> str:
+    """Hosted QR for emails; the signature authorises only this one ticket."""
+    return (
+        f"{settings.PUBLIC_BASE_URL.rstrip('/')}/v1/tickets/{booking.booking_ref}/qr.png"
+        f"?token={quote(ticket.qr_signature, safe='')}"
+    )
+
+
+def _qr_attachment(booking: Booking, ticket: Ticket) -> list[InlineImage]:
+    try:
+        return [
+            InlineImage(
+                cid=f"ejsqr-{booking.booking_ref.lower()}",
+                content=read_ticket_png(ticket),
+                filename=f"{booking.booking_ref}.png",
+                inline=False,
+            )
+        ]
+    except Exception as exc:  # noqa: BLE001 - the hosted QR still renders
+        log_event(logger, logging.WARNING, "could not attach QR", error=str(exc))
+        return []
 
 
 def build_trip_view(trip: Trip, route: Route) -> TripView:
@@ -121,17 +145,8 @@ async def send_booking_confirmation(
 
     # ── Email with the QR embedded inline ──
     if booking.passenger_email and (user is None or user.notify_email):
-        images: list[InlineImage] = []
-        qr_cid = None
-        if ticket:
-            try:
-                qr_cid = f"ejsqr-{booking.booking_ref.lower()}"
-                images.append(
-                    InlineImage(cid=qr_cid, content=read_ticket_png(ticket), filename=f"{booking.booking_ref}.png")
-                )
-            except Exception as exc:  # noqa: BLE001 - send the email even without the image
-                log_event(logger, logging.WARNING, "could not attach QR", error=str(exc))
-                qr_cid = None
+        images = _qr_attachment(booking, ticket) if ticket else []
+        qr_url = _qr_image_url(booking, ticket) if ticket else None
 
         subject = f"Your Ecojindu ticket · {booking.booking_ref} · {view.time_label} {view.date_label}"
         html = render_template(
@@ -140,7 +155,7 @@ async def send_booking_confirmation(
             booking=booking,
             trip=view,
             details=_trip_details_rows(booking, view),
-            qr_cid=qr_cid,
+            qr_url=qr_url,
         )
         text = (
             f"Booking confirmed — {booking.booking_ref}\n"
@@ -225,16 +240,8 @@ async def send_trip_reminder(
     sms_lead = sms_leads.get(window, f"Your Ecojindu shuttle departs in {window}")
 
     if booking.passenger_email and (user is None or user.notify_email):
-        images: list[InlineImage] = []
-        qr_cid = None
-        if ticket:
-            try:
-                qr_cid = f"ejsqr-{booking.booking_ref.lower()}"
-                images.append(
-                    InlineImage(cid=qr_cid, content=read_ticket_png(ticket), filename=f"{booking.booking_ref}.png")
-                )
-            except Exception:  # noqa: BLE001
-                qr_cid = None
+        images = _qr_attachment(booking, ticket) if ticket else []
+        qr_url = _qr_image_url(booking, ticket) if ticket else None
 
         subject = f"{headline} · {view.time_label} to {view.destination} · {booking.booking_ref}"
         html = render_template(
@@ -244,7 +251,7 @@ async def send_trip_reminder(
             trip=view,
             window=window,
             details=_trip_details_rows(booking, view),
-            qr_cid=qr_cid,
+            qr_url=qr_url,
         )
         result = await send_email(booking.passenger_email, subject, html, None, images)
         await _record(

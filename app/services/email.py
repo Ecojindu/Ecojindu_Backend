@@ -50,6 +50,9 @@ class InlineImage:
     content: bytes
     subtype: str = "png"
     filename: str = "image.png"
+    # Some SMTP relays (Resend) drop multipart/related parts, so a CID image
+    # renders broken. False sends it as a plain downloadable attachment.
+    inline: bool = True
 
 
 def render_template(template_name: str, **context) -> str:
@@ -75,13 +78,17 @@ def _build_message(
     msg.set_content(text or "This email needs an HTML-capable mail client.")
     msg.add_alternative(html, subtype="html")
 
-    if images:
+    inline = [img for img in images if img.inline]
+    if inline:
         html_part = msg.get_payload()[-1]
-        for img in images:
+        for img in inline:
             html_part.add_related(
                 img.content, maintype="image", subtype=img.subtype, cid=f"<{img.cid}>",
                 filename=img.filename,
             )
+    for img in images:
+        if not img.inline:
+            msg.add_attachment(img.content, maintype="image", subtype=img.subtype, filename=img.filename)
     return msg
 
 
