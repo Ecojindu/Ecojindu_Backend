@@ -24,11 +24,9 @@ def upgrade() -> None:
     op.add_column('bookings', sa.Column('payment_method', sa.String(length=32), nullable=True))
     op.add_column('bookings', sa.Column('payment_reference', sa.String(length=128), nullable=True))
     op.add_column('bookings', sa.Column('rescheduled_from_booking_id', sa.UUID(), nullable=True))
-    op.add_column('bookings', sa.Column('cancellation_reason', sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column('bookings', 'cancellation_reason')
     op.drop_column('bookings', 'rescheduled_from_booking_id')
     op.drop_column('bookings', 'payment_reference')
     op.drop_column('bookings', 'payment_method')
