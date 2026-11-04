@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.core.errors import NotFoundError, ValidationError
 from app.core.logging import log_event
 from app.core.security import build_qr_token, parse_qr_token, verify_ticket_signature
+from app.core.timeutil import today_lagos
 from app.models.booking import Booking, Ticket
 from app.models.enums import BookingStatus, TripStatus
 from app.models.trip import Trip
@@ -186,7 +187,7 @@ async def validate_and_check_in(
     if trip.status == TripStatus.CANCELLED:
         return ValidationOutcome(False, "trip_cancelled", "This departure was cancelled.", booking)
 
-    today = datetime.now(timezone.utc).date()
+    today = today_lagos()
     if trip.service_date != today:
         return ValidationOutcome(
             False,

@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_SMS_FROM: str = "+15005550006"
+    TWILIO_WHATSAPP_FROM: str = "whatsapp:+2348128000082"
+    WHATSAPP_ENABLED: bool = True
+    AI_SERVICE_URL: str = "https://ecojindu-ai-480235407496.us-central1.run.app"
 
     # ── Scheduler ─────────────────────────────────────────────
     SCHEDULER_ENABLED: bool = True

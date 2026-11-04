@@ -26,6 +26,7 @@ from app.models.trip import Trip
 from app.models.user import User
 from app.services.email import InlineImage, render_template, send_email
 from app.services.sms import send_sms
+from app.services.whatsapp import send_whatsapp
 from app.services.tickets import read_ticket_png
 
 logger = logging.getLogger("ecojindu.notifications")
@@ -204,6 +205,48 @@ async def send_booking_confirmation(
             provider_message_id=result.message_id,
             error=result.error,
             payload={"body": body},
+        )
+
+    # ── WhatsApp with QR Code Ticket ──
+    if booking.passenger_phone and (user is None or user.notify_whatsapp):
+        qr_url = _qr_image_url(booking, ticket) if ticket else None
+        wa_seats_str = ", ".join(booking.seat_numbers) if booking.seat_numbers else str(booking.seats)
+        wa_body = (
+            f"🎉 *Payment Confirmed! Your Ecojindu Shuttle Booking is Confirmed.*\n\n"
+            f"📋 *Booking Ref:* `{booking.booking_ref}`\n"
+            f"👤 *Passenger:* {booking.passenger_name}\n"
+            f"📍 *Route:* {view.origin} ➔ {view.destination}\n"
+            f"⏰ *Departure:* {view.date_label} at {view.time_label}\n"
+            f"💺 *Seat(s):* {wa_seats_str}\n\n"
+            f"📲 *Your QR Code Boarding Pass is attached below.*\n"
+            f"Please show this QR code to the driver or terminal marshal at boarding. Arrive 20 minutes before departure.\n\n"
+            f"Manage booking: {settings.WEB_BASE_URL}/manage?ref={booking.booking_ref}"
+        )
+        wa_result = await send_whatsapp(
+            to=booking.passenger_phone,
+            message=wa_body,
+            media_url=qr_url,
+            booking_ref=booking.booking_ref,
+            passenger_name=booking.passenger_name,
+            origin=view.origin,
+            destination=view.destination,
+            departure_time=f"{view.date_label} at {view.time_label}",
+            seats=booking.seats,
+            seat_numbers=booking.seat_numbers,
+        )
+        await _record(
+            db,
+            channel=NotificationChannel.WHATSAPP,
+            ntype=NotificationType.CONFIRMATION,
+            recipient=booking.passenger_phone,
+            status=NotificationStatus.SENT if wa_result.success else NotificationStatus.FAILED,
+            booking_id=booking.id,
+            user_id=booking.user_id,
+            trip_id=trip.id,
+            provider=wa_result.provider,
+            provider_message_id=wa_result.message_id,
+            error=wa_result.error,
+            payload={"body": wa_body, "media_url": qr_url},
         )
 
 
