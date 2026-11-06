@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # ── Paystack ──────────────────────────────────────────────
     PAYSTACK_SECRET_KEY: str = "sk_test_placeholder"
     PAYSTACK_PUBLIC_KEY: str = "pk_test_placeholder"
+    PAYSTACK_WEBHOOK_SECRET: str = ""
     PAYSTACK_BASE_URL: str = "https://api.paystack.co"
     PAYSTACK_CALLBACK_URL: str = "http://localhost:3000/booking/callback"
     PAYSTACK_MOCK: bool = True

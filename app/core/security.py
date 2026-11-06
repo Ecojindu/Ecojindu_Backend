@@ -140,8 +140,23 @@ def constant_time_equals(a: str, b: str) -> bool:
 
 
 def verify_paystack_signature(raw_body: bytes, header_signature: str) -> bool:
-    """Paystack signs webhooks with HMAC-SHA512 keyed by the secret key."""
-    expected = hmac.new(
-        settings.PAYSTACK_SECRET_KEY.encode("utf-8"), raw_body, hashlib.sha512
-    ).hexdigest()
-    return hmac.compare_digest(expected, header_signature or "")
+    """Paystack signs webhooks with HMAC-SHA512.
+    Supports both dedicated PAYSTACK_WEBHOOK_SECRET (whsec_...) and PAYSTACK_SECRET_KEY (sk_live_...).
+    """
+    if not header_signature:
+        return False
+    # Check dedicated webhook secret first if configured
+    if settings.PAYSTACK_WEBHOOK_SECRET:
+        expected = hmac.new(
+            settings.PAYSTACK_WEBHOOK_SECRET.encode("utf-8"), raw_body, hashlib.sha512
+        ).hexdigest()
+        if hmac.compare_digest(expected, header_signature):
+            return True
+    # Fallback to secret key
+    if settings.PAYSTACK_SECRET_KEY:
+        expected = hmac.new(
+            settings.PAYSTACK_SECRET_KEY.encode("utf-8"), raw_body, hashlib.sha512
+        ).hexdigest()
+        if hmac.compare_digest(expected, header_signature):
+            return True
+    return False
