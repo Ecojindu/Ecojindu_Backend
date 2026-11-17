@@ -7,7 +7,7 @@ from app.api.deps import DbSession, OptionalUser, StaffUser
 from app.core.errors import ForbiddenError, NotFoundError
 from app.core.security import constant_time_equals, parse_qr_token, verify_ticket_signature
 from app.core.timeutil import fmt_datetime
-from app.models.enums import UserRole
+from app.models.enums import BookingStatus, UserRole
 from app.models.route import Route
 from app.models.trip import Trip
 from app.schemas.booking import ValidateTicketRequest, ValidateTicketResponse
@@ -53,6 +53,10 @@ async def ticket_qr(
                     authorized = True
             except Exception:
                 pass
+
+    # If ticket is issued for a confirmed or checked-in booking, permit serving the QR image
+    if not authorized and booking.status in {BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN}:
+        authorized = True
 
     if not authorized:
         raise ForbiddenError("You do not have permission to view this ticket QR code.")

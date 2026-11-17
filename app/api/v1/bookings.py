@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import desc, select
 
 from app.api.deps import CurrentUser, DbSession, OptionalUser, ServiceOrAdmin
@@ -335,6 +336,116 @@ async def create_subscription_booking_internal(
         hold_expires_at=None,
         message=f"Confirmed with {payload.seats} ride credit(s).",
     )
+
+
+class UpdateEmailRequest(BaseModel):
+    email: EmailStr
+
+
+@router.get(
+    "/internal/active-for-phone",
+    response_model=dict,
+    summary="Get latest active or pending booking for a given phone number",
+)
+async def get_active_booking_for_phone(
+    phone: str = Query(..., description="Customer phone number"),
+    db: DbSession = None,
+    caller: ServiceOrAdmin = None,
+) -> dict:
+    """Retrieve the most relevant active (pending_payment or confirmed) booking for a phone.
+
+    Used by Ecojindu AI bot to maintain instant context across multi-turn conversations.
+    """
+    from app.models.enums import BookingStatus
+    from app.models.payment import Payment
+
+    # Normalize phone: extract last 10 digits
+    clean_digits = "".join(c for c in phone if c.isdigit())
+    last10 = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+
+    stmt = (
+        select(Booking)
+        .where(
+            Booking.passenger_phone.like(f"%{last10}%"),
+            Booking.status.in_([BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN]),
+        )
+        .order_by(desc(Booking.created_at))
+        .limit(1)
+    )
+
+    booking = (await db.execute(stmt)).unique().scalar_one_or_none()
+    if not booking:
+        return {"found": False, "booking": None}
+
+    hydrated = await _hydrate(db, booking)
+
+    # Check latest payment record if pending_payment
+    payment_url = None
+    payment_ref = None
+    if booking.status == BookingStatus.PENDING_PAYMENT:
+        pay_stmt = (
+            select(Payment)
+            .where(Payment.booking_id == booking.id)
+            .order_by(desc(Payment.created_at))
+            .limit(1)
+        )
+        payment = (await db.execute(pay_stmt)).scalar_one_or_none()
+        if payment:
+            payment_url = payment.authorization_url
+            payment_ref = payment.paystack_reference
+
+    qr_url = booking.ticket.qr_image_url if booking.ticket else None
+
+    return {
+        "found": True,
+        "booking": {
+            "booking_ref": booking.booking_ref,
+            "passenger_name": booking.passenger_name,
+            "passenger_phone": booking.passenger_phone,
+            "passenger_email": booking.passenger_email,
+            "status": booking.status.value if hasattr(booking.status, "value") else str(booking.status),
+            "seats": booking.seats,
+            "seat_numbers": booking.seat_numbers or [],
+            "amount_kobo": booking.amount_kobo,
+            "total_fare_naira": booking.amount_kobo // 100,
+            "payment_url": payment_url,
+            "payment_reference": payment_ref,
+            "qr_image_url": qr_url,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None,
+            "trip": {
+                "id": str(hydrated.trip.id) if hydrated.trip else None,
+                "route_name": hydrated.trip.route.name if hydrated.trip and hydrated.trip.route else None,
+                "origin": hydrated.trip.origin_terminal if hydrated.trip else None,
+                "destination": hydrated.trip.destination if hydrated.trip else None,
+                "departure_datetime": hydrated.trip.departure_datetime.isoformat() if hydrated.trip else None,
+                "departure_time": hydrated.trip.departure_time if hydrated.trip else None,
+                "service_date": hydrated.trip.service_date.isoformat() if hydrated.trip else None,
+            } if hydrated.trip else None,
+        },
+    }
+
+
+@router.patch(
+    "/internal/{booking_ref}/email",
+    response_model=dict,
+    summary="Update customer email on an existing booking",
+)
+async def update_booking_email(
+    booking_ref: str,
+    payload: UpdateEmailRequest,
+    db: DbSession,
+    caller: ServiceOrAdmin,
+) -> dict:
+    booking = await booking_service.get_booking_by_ref(db, booking_ref)
+    booking.passenger_email = payload.email.strip()
+    if booking.user:
+        booking.user.email = payload.email.strip()
+    await db.commit()
+    return {
+        "success": True,
+        "booking_ref": booking.booking_ref,
+        "passenger_email": booking.passenger_email,
+    }
 
 
 @router.get(
