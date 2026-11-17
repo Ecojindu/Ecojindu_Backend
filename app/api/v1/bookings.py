@@ -1,6 +1,7 @@
 """Booking creation, lookup, cancellation and ticket resends."""
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
@@ -414,11 +415,11 @@ async def get_active_booking_for_phone(
             "created_at": booking.created_at.isoformat() if booking.created_at else None,
             "trip": {
                 "id": str(hydrated.trip.id) if hydrated.trip else None,
-                "route_name": hydrated.trip.route.name if hydrated.trip and hydrated.trip.route else None,
+                "route_name": hydrated.trip.route_name if hydrated.trip else None,
                 "origin": hydrated.trip.origin_terminal if hydrated.trip else None,
                 "destination": hydrated.trip.destination if hydrated.trip else None,
                 "departure_datetime": hydrated.trip.departure_datetime.isoformat() if hydrated.trip else None,
-                "departure_time": hydrated.trip.departure_time if hydrated.trip else None,
+                "departure_time": hydrated.trip.departure_datetime.astimezone(timezone(timedelta(hours=1))).strftime("%I:%M %p") if hydrated.trip else None,
                 "service_date": hydrated.trip.service_date.isoformat() if hydrated.trip else None,
             } if hydrated.trip else None,
         },
