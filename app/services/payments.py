@@ -37,7 +37,7 @@ logger = logging.getLogger("ecojindu.payments")
 
 async def initialize_booking_payment(db: AsyncSession, booking: Booking, email: str | None) -> Payment:
     reference = generate_payment_reference("EJSBK")
-    customer_email = email or booking.passenger_email or f"{booking.passenger_phone.lstrip('+')}@guest.ecojindu.ng"
+    customer_email = email or booking.passenger_email or f"{booking.passenger_phone.lstrip('+')}@guest.eshuttle.ng"
 
     init = await paystack.initialize(
         email=customer_email,
@@ -116,7 +116,7 @@ async def initialize_charter_payment(db: AsyncSession, charter) -> Payment:
     if existing:
         return existing
 
-    email = charter.contact_email or f"{charter.contact_phone.lstrip('+')}@guest.ecojindu.ng"
+    email = charter.contact_email or f"{charter.contact_phone.lstrip('+')}@guest.eshuttle.ng"
     init = await paystack.initialize(
         email=email,
         amount_kobo=charter.quoted_amount_kobo,

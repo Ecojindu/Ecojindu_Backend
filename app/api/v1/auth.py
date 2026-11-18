@@ -113,10 +113,22 @@ async def register(payload: RegisterRequest, db: DbSession) -> AuthResponse:
     dependencies=[Depends(RateLimiter("login"))],
 )
 async def login(payload: LoginRequest, db: DbSession) -> AuthResponse:
-    identifier = payload.identifier.strip()
+    identifier = payload.identifier.strip().lower()
     user = (
-        await db.execute(select(User).where(User.email == identifier.lower()))
+        await db.execute(select(User).where(User.email == identifier))
     ).unique().scalar_one_or_none()
+
+    # Domain compatibility alias: allow logging in with either @eshuttle.ng or @ecojindu.ng
+    if user is None:
+        alt_identifier = None
+        if identifier.endswith("@eshuttle.ng"):
+            alt_identifier = identifier.replace("@eshuttle.ng", "@ecojindu.ng")
+        elif identifier.endswith("@ecojindu.ng"):
+            alt_identifier = identifier.replace("@ecojindu.ng", "@eshuttle.ng")
+        if alt_identifier:
+            user = (
+                await db.execute(select(User).where(User.email == alt_identifier))
+            ).unique().scalar_one_or_none()
 
     if user is None:
         try:

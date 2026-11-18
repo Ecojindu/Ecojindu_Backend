@@ -39,11 +39,11 @@ from app.services.bookings import create_booking, create_subscription_booking  #
 from app.services.trips import generate_trips_from_templates  # noqa: E402
 
 # ── Demo credentials (documented in the README) ──────────────
-SUPER_ADMIN = ("Chidi Otti", "admin@ecojindu.ng", "+2348154471570", "Ecojindu@2026")
-OPERATIONS = ("Ngozi Eze", "ops@ecojindu.ng", "+2348031234567", "Ecojindu@2026")
+SUPER_ADMIN = ("Chidi Otti", "admin@eshuttle.ng", "+2348154471570", "Ecojindu@2026")
+OPERATIONS = ("Ngozi Eze", "ops@eshuttle.ng", "+2348031234567", "Ecojindu@2026")
 DRIVERS = [
-    ("Emeka Nwosu", "emeka.driver@ecojindu.ng", "+2348062345678", "Driver@2026", "ABI-DRV-4471"),
-    ("Uche Kalu", "uche.driver@ecojindu.ng", "+2348073456789", "Driver@2026", "ABI-DRV-5582"),
+    ("Emeka Nwosu", "emeka.driver@eshuttle.ng", "+2348062345678", "Driver@2026", "ABI-DRV-4471"),
+    ("Uche Kalu", "uche.driver@eshuttle.ng", "+2348073456789", "Driver@2026", "ABI-DRV-5582"),
 ]
 SUBSCRIBER = ("Amaka Obi", "amaka@example.com", "+2348090001122", "Passenger@2026")
 GUEST = ("Ifeanyi Duru", "ifeanyi@example.com", "+2348123334455")

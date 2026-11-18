@@ -68,10 +68,10 @@ Open **http://localhost:8000/docs** for the interactive OpenAPI reference.
 
 | Role | Email | Password |
 |---|---|---|
-| Super admin | `admin@ecojindu.ng` | `Ecojindu@2026` |
-| Operations | `ops@ecojindu.ng` | `Ecojindu@2026` |
-| Driver | `emeka.driver@ecojindu.ng` | `Driver@2026` |
-| Driver | `uche.driver@ecojindu.ng` | `Driver@2026` |
+| Super admin | `admin@eshuttle.ng` | `Ecojindu@2026` |
+| Operations | `ops@eshuttle.ng` | `Ecojindu@2026` |
+| Driver | `emeka.driver@eshuttle.ng` | `Driver@2026` |
+| Driver | `uche.driver@eshuttle.ng` | `Driver@2026` |
 | Subscriber | `amaka@example.com` | `Passenger@2026` |
 
 The seed is idempotent — re-run `python -m scripts.seed` any time to top the data up.
